@@ -1,108 +1,123 @@
 'use client'
 import React, { useState, useEffect } from 'react';
-import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
-import { Plus, X, MoreVertical } from 'lucide-react';
+import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
+import { Plus, X } from 'lucide-react';
+import { v4 as uuidv4 } from 'uuid';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 
+const colors = {
+  primary: '#89A8B2',
+  secondary: '#B3C8CF',
+  background: '#E5E1DA',
+  surface: '#F1F0E8',
+};
+
 const TrelloBoard = () => {
-  const [lists, setLists] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('trelloLists');
-      return saved ? JSON.parse(saved) : [];
-    }
-    return [];
-  });
-  
+  const [mounted, setMounted] = useState(false);
+  const [lists, setLists] = useState([]);
   const [newListTitle, setNewListTitle] = useState('');
   const [selectedCard, setSelectedCard] = useState(null);
   const [isCardModalOpen, setIsCardModalOpen] = useState(false);
 
   useEffect(() => {
-    localStorage.setItem('trelloLists', JSON.stringify(lists));
-  }, [lists]);
+    const savedData = localStorage.getItem('trelloLists');
+    if (savedData) {
+      setLists(JSON.parse(savedData));
+    }
+    setMounted(true);
+  }, []);
 
-  const addList = () => {
-    if (!newListTitle.trim()) return;
-    setLists([...lists, { id: Date.now().toString(), title: newListTitle, cards: [] }]);
-    setNewListTitle('');
+  useEffect(() => {
+    if (mounted) {
+      localStorage.setItem('trelloLists', JSON.stringify(lists));
+    }
+  }, [lists, mounted]);
+
+  const reorderLists = (startIndex, endIndex) => {
+    const result = Array.from(lists);
+    const [removed] = result.splice(startIndex, 1);
+    result.splice(endIndex, 0, removed);
+    return result;
   };
 
-  const deleteList = (listId) => {
-    setLists(lists.filter(list => list.id !== listId));
-  };
+  const reorderCards = (sourceList, destinationList, sourceIndex, destinationIndex) => {
+    const startList = [...lists];
+    const sourceListIndex = startList.findIndex(list => list.id === sourceList);
+    const destinationListIndex = startList.findIndex(list => list.id === destinationList);
 
-  const addCard = (listId) => {
-    const updatedLists = lists.map(list => {
-      if (list.id === listId) {
-        return {
-          ...list,
-          cards: [...list.cards, { 
-            id: Date.now().toString(), 
-            title: 'New Card',
-            description: '',
-            dueDate: ''
-          }]
-        };
-      }
-      return list;
-    });
-    setLists(updatedLists);
-  };
+    const [removed] = startList[sourceListIndex].cards.splice(sourceIndex, 1);
+    startList[destinationListIndex].cards.splice(destinationIndex, 0, removed);
 
-  const updateCard = (card) => {
-    const updatedLists = lists.map(list => ({
-      ...list,
-      cards: list.cards.map(c => c.id === card.id ? card : c)
-    }));
-    setLists(updatedLists);
-    setIsCardModalOpen(false);
-  };
-
-  const deleteCard = (cardId) => {
-    const updatedLists = lists.map(list => ({
-      ...list,
-      cards: list.cards.filter(card => card.id !== cardId)
-    }));
-    setLists(updatedLists);
-    setIsCardModalOpen(false);
+    return startList;
   };
 
   const onDragEnd = (result) => {
     const { source, destination, type } = result;
+
     if (!destination) return;
 
+    if (source.droppableId === destination.droppableId && source.index === destination.index) return;
+
     if (type === 'LIST') {
-      const newLists = Array.from(lists);
-      const [removed] = newLists.splice(source.index, 1);
-      newLists.splice(destination.index, 0, removed);
-      setLists(newLists);
+      setLists(reorderLists(source.index, destination.index));
       return;
     }
 
-    const sourceList = lists.find(list => list.id === source.droppableId);
-    const destList = lists.find(list => list.id === destination.droppableId);
-    const draggingCard = sourceList.cards[source.index];
+    setLists(reorderCards(source.droppableId, destination.droppableId, source.index, destination.index));
+  };
 
-    const newLists = lists.map(list => {
-      if (list.id === source.droppableId) {
-        list.cards.splice(source.index, 1);
-      }
-      if (list.id === destination.droppableId) {
-        list.cards.splice(destination.index, 0, draggingCard);
-      }
-      return list;
-    });
+  const addList = () => {
+    if (!newListTitle.trim()) return;
+    setLists(prev => [...prev, { 
+      id: uuidv4(),
+      title: newListTitle, 
+      cards: [] 
+    }]);
+    setNewListTitle('');
+  };
 
-    setLists(newLists);
+  const deleteList = (listId) => {
+    setLists(prev => prev.filter(list => list.id !== listId));
+  };
+
+  const addCard = (listId) => {
+    setLists(prev => prev.map(list => 
+      list.id === listId 
+        ? {
+            ...list,
+            cards: [...list.cards, { 
+              id: uuidv4(),
+              title: 'New Card',
+              description: '',
+              dueDate: ''
+            }]
+          }
+        : list
+    ));
+  };
+
+  const updateCard = (card) => {
+    setLists(prev => prev.map(list => ({
+      ...list,
+      cards: list.cards.map(c => c.id === card.id ? card : c)
+    })));
+    setIsCardModalOpen(false);
+  };
+
+  const deleteCard = (cardId) => {
+    setLists(prev => prev.map(list => ({
+      ...list,
+      cards: list.cards.filter(card => card.id !== cardId)
+    })));
+    setIsCardModalOpen(false);
   };
 
   const resetBoard = () => {
@@ -110,52 +125,69 @@ const TrelloBoard = () => {
     localStorage.removeItem('trelloLists');
   };
 
+  if (!mounted) return null;
+
   return (
-    <div className="min-h-screen bg-gray-100">
-      <header className="bg-white shadow p-4 flex justify-between items-center">
+    <div className="min-h-screen" style={{ backgroundColor: colors.background }}>
+      <header style={{ backgroundColor: colors.primary }} className="shadow p-4 flex justify-between items-center text-white">
         <h1 className="text-xl font-bold">Trello Clone</h1>
-        <Button variant="destructive" onClick={resetBoard}>Reset Board</Button>
+        <Button 
+          variant="ghost" 
+          onClick={resetBoard}
+          className="hover:bg-red-500 text-white hover:text-white"
+        >
+          Reset Board
+        </Button>
       </header>
 
       <DragDropContext onDragEnd={onDragEnd}>
         <div className="p-4 overflow-x-auto">
-          <Droppable droppableId="board" type="LIST" direction="horizontal">
+          <Droppable droppableId="all-lists" direction="horizontal" type="LIST">
             {(provided) => (
               <div 
+                {...provided.droppableProps} 
                 ref={provided.innerRef}
-                {...provided.droppableProps}
                 className="flex gap-4"
               >
                 {lists.map((list, index) => (
-                  <Draggable 
-                    key={list.id} 
-                    draggableId={list.id} 
-                    index={index}
-                  >
-                    {(provided) => (
+                  <Draggable key={list.id} draggableId={list.id} index={index}>
+                    {(provided, snapshot) => (
                       <div
                         ref={provided.innerRef}
                         {...provided.draggableProps}
-                        {...provided.dragHandleProps}
-                        className="bg-gray-200 rounded-lg p-4 w-72 flex-shrink-0"
+                        style={{
+                          ...provided.draggableProps.style,
+                          backgroundColor: colors.secondary
+                        }}
+                        className="rounded-lg p-4 w-72 flex-shrink-0 shadow-lg"
                       >
-                        <div className="flex justify-between items-center mb-4">
-                          <h2 className="font-bold">{list.title}</h2>
+                        <div 
+                          className="flex justify-between items-center mb-4"
+                          {...provided.dragHandleProps}
+                        >
+                          <h2 className="font-bold text-gray-700">{list.title}</h2>
                           <Button 
                             variant="ghost" 
                             size="icon"
                             onClick={() => deleteList(list.id)}
+                            className="hover:bg-red-100"
                           >
-                            <X className="h-4 w-4" />
+                            <X className="h-4 w-4 text-gray-600" />
                           </Button>
                         </div>
 
-                        <Droppable droppableId={list.id}>
-                          {(provided) => (
+                        <Droppable droppableId={list.id} type="CARD">
+                          {(provided, snapshot) => (
                             <div
                               ref={provided.innerRef}
                               {...provided.droppableProps}
-                              className="space-y-2"
+                              className={`space-y-2 min-h-[50px] rounded-md p-2`}
+                              style={{ 
+                                backgroundColor: snapshot.isDraggingOver 
+                                  ? colors.background
+                                  : 'transparent',
+                                transition: 'background-color 0.2s ease'
+                              }}
                             >
                               {list.cards.map((card, index) => (
                                 <Draggable
@@ -163,19 +195,25 @@ const TrelloBoard = () => {
                                   draggableId={card.id}
                                   index={index}
                                 >
-                                  {(provided) => (
+                                  {(provided, snapshot) => (
                                     <div
                                       ref={provided.innerRef}
                                       {...provided.draggableProps}
                                       {...provided.dragHandleProps}
-                                      className="bg-white p-3 rounded shadow cursor-pointer"
+                                      style={{
+                                        ...provided.draggableProps.style,
+                                        backgroundColor: colors.surface,
+                                      }}
+                                      className={`p-3 rounded-md shadow cursor-pointer
+                                        ${snapshot.isDragging ? 'shadow-lg' : 'shadow'}
+                                        transition-shadow duration-200`}
                                       onClick={() => {
                                         setSelectedCard(card);
                                         setIsCardModalOpen(true);
                                       }}
                                     >
                                       <div className="flex justify-between items-center">
-                                        <span>{card.title}</span>
+                                        <span className="text-gray-700">{card.title}</span>
                                         {card.dueDate && (
                                           <span className="text-xs text-gray-500">
                                             Due: {card.dueDate}
@@ -193,7 +231,8 @@ const TrelloBoard = () => {
 
                         <Button 
                           variant="ghost" 
-                          className="w-full mt-4"
+                          className="w-full mt-4 text-gray-600 hover:text-gray-800"
+                          style={{ backgroundColor: colors.surface }}
                           onClick={() => addCard(list.id)}
                         >
                           <Plus className="h-4 w-4 mr-2" /> Add Card
@@ -204,14 +243,19 @@ const TrelloBoard = () => {
                 ))}
                 {provided.placeholder}
 
-                <div className="bg-gray-200 rounded-lg p-4 w-72 flex-shrink-0">
+                <div style={{ backgroundColor: colors.secondary }} className="rounded-lg p-4 w-72 flex-shrink-0 shadow-lg">
                   <Input
                     placeholder="Enter list title..."
                     value={newListTitle}
                     onChange={(e) => setNewListTitle(e.target.value)}
                     className="mb-2"
+                    style={{ backgroundColor: colors.surface }}
                   />
-                  <Button onClick={addList} className="w-full">
+                  <Button 
+                    onClick={addList} 
+                    className="w-full"
+                    style={{ backgroundColor: colors.primary }}
+                  >
                     Add List
                   </Button>
                 </div>
@@ -222,7 +266,7 @@ const TrelloBoard = () => {
       </DragDropContext>
 
       <Dialog open={isCardModalOpen} onOpenChange={setIsCardModalOpen}>
-        <DialogContent>
+        <DialogContent style={{ backgroundColor: colors.surface }}>
           <DialogHeader>
             <DialogTitle>Edit Card</DialogTitle>
           </DialogHeader>
@@ -235,6 +279,7 @@ const TrelloBoard = () => {
                   title: e.target.value
                 })}
                 placeholder="Card Title"
+                style={{ backgroundColor: 'white' }}
               />
               <Textarea
                 value={selectedCard.description}
@@ -243,6 +288,7 @@ const TrelloBoard = () => {
                   description: e.target.value
                 })}
                 placeholder="Description"
+                style={{ backgroundColor: 'white' }}
               />
               <Input
                 type="date"
@@ -251,9 +297,13 @@ const TrelloBoard = () => {
                   ...selectedCard,
                   dueDate: e.target.value
                 })}
+                style={{ backgroundColor: 'white' }}
               />
               <div className="flex justify-between">
-                <Button onClick={() => updateCard(selectedCard)}>
+                <Button 
+                  onClick={() => updateCard(selectedCard)}
+                  style={{ backgroundColor: colors.primary }}
+                >
                   Save Changes
                 </Button>
                 <Button 
@@ -268,7 +318,7 @@ const TrelloBoard = () => {
         </DialogContent>
       </Dialog>
 
-      <footer className="bg-white shadow p-4 text-center text-gray-500">
+      <footer style={{ backgroundColor: colors.primary }} className="shadow p-4 text-center text-white">
         Trello Clone - Built with Next.js and shadcn/ui
       </footer>
     </div>
