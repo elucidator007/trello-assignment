@@ -1,5 +1,4 @@
-// import Board from "@/components/Board";
-import TrelloBoard from "@/components/trelloBoard";
+import { TrelloBoard } from "@/components/Board";
 
 export default function Home() {
   return (

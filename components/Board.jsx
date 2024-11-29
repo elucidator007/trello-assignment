@@ -1,26 +1,16 @@
 'use client'
-import React, { useState, useEffect } from 'react';
-import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import { Plus, X } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { DragDropContext, Droppable } from '@hello-pangea/dnd';
+import { Plus } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { List } from './List';
+import { colors } from '@/lib/constants';
 
-const colors = {
-  primary: '#89A8B2',
-  secondary: '#B3C8CF',
-  background: '#E5E1DA',
-  surface: '#F1F0E8',
-};
-
-const TrelloBoard = () => {
+export const TrelloBoard = () => {
   const [mounted, setMounted] = useState(false);
   const [lists, setLists] = useState([]);
   const [newListTitle, setNewListTitle] = useState('');
@@ -52,25 +42,19 @@ const TrelloBoard = () => {
     const startList = [...lists];
     const sourceListIndex = startList.findIndex(list => list.id === sourceList);
     const destinationListIndex = startList.findIndex(list => list.id === destinationList);
-
     const [removed] = startList[sourceListIndex].cards.splice(sourceIndex, 1);
     startList[destinationListIndex].cards.splice(destinationIndex, 0, removed);
-
     return startList;
   };
 
   const onDragEnd = (result) => {
     const { source, destination, type } = result;
-
     if (!destination) return;
-
     if (source.droppableId === destination.droppableId && source.index === destination.index) return;
-
     if (type === 'LIST') {
       setLists(reorderLists(source.index, destination.index));
       return;
     }
-
     setLists(reorderCards(source.droppableId, destination.droppableId, source.index, destination.index));
   };
 
@@ -120,6 +104,12 @@ const TrelloBoard = () => {
     setIsCardModalOpen(false);
   };
 
+  const updateListTitle = (listId, newTitle) => {
+    setLists(prev => prev.map(list => 
+      list.id === listId ? { ...list, title: newTitle } : list
+    ));
+  };
+
   const resetBoard = () => {
     setLists([]);
     localStorage.removeItem('trelloLists');
@@ -128,20 +118,25 @@ const TrelloBoard = () => {
   if (!mounted) return null;
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: colors.background }}>
+    <div className="min-h-screen flex flex-col" style={{ backgroundColor: colors.background }}>
       <header style={{ backgroundColor: colors.primary }} className="shadow p-4 flex justify-between items-center text-white">
-        <h1 className="text-xl font-bold">Trello Clone</h1>
+        <div className="flex items-center gap-2">
+            <svg className="w-8 h-8" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M19 3H5C3.9 3 3 3.9 3 5V19C3 20.1 3.9 21 5 21H19C20.1 21 21 20.1 21 19V5C21 3.9 20.1 3 19 3ZM14 17H7V15H14V17ZM17 13H7V11H17V13ZM17 9H7V7H17V9Z"/>
+            </svg>
+            <h1 className="text-xl font-bold">Trello Borad - Task Management</h1>
+        </div>
         <Button 
-          variant="ghost" 
-          onClick={resetBoard}
-          className="hover:bg-red-500 text-white hover:text-white"
+            variant="ghost" 
+            onClick={resetBoard}
+            className="hover:bg-red-500 text-white hover:text-white"
         >
-          Reset Board
+            Reset Board
         </Button>
-      </header>
+    </header>
 
-      <DragDropContext onDragEnd={onDragEnd}>
-        <div className="p-4 overflow-x-auto">
+      <main className="flex-1 p-4 overflow-x-auto">
+        <DragDropContext onDragEnd={onDragEnd}>
           <Droppable droppableId="all-lists" direction="horizontal" type="LIST">
             {(provided) => (
               <div 
@@ -150,96 +145,18 @@ const TrelloBoard = () => {
                 className="flex gap-4"
               >
                 {lists.map((list, index) => (
-                  <Draggable key={list.id} draggableId={list.id} index={index}>
-                    {(provided, snapshot) => (
-                      <div
-                        ref={provided.innerRef}
-                        {...provided.draggableProps}
-                        style={{
-                          ...provided.draggableProps.style,
-                          backgroundColor: colors.secondary
-                        }}
-                        className="rounded-lg p-4 w-72 flex-shrink-0 shadow-lg"
-                      >
-                        <div 
-                          className="flex justify-between items-center mb-4"
-                          {...provided.dragHandleProps}
-                        >
-                          <h2 className="font-bold text-gray-700">{list.title}</h2>
-                          <Button 
-                            variant="ghost" 
-                            size="icon"
-                            onClick={() => deleteList(list.id)}
-                            className="hover:bg-red-100"
-                          >
-                            <X className="h-4 w-4 text-gray-600" />
-                          </Button>
-                        </div>
-
-                        <Droppable droppableId={list.id} type="CARD">
-                          {(provided, snapshot) => (
-                            <div
-                              ref={provided.innerRef}
-                              {...provided.droppableProps}
-                              className={`space-y-2 min-h-[50px] rounded-md p-2`}
-                              style={{ 
-                                backgroundColor: snapshot.isDraggingOver 
-                                  ? colors.background
-                                  : 'transparent',
-                                transition: 'background-color 0.2s ease'
-                              }}
-                            >
-                              {list.cards.map((card, index) => (
-                                <Draggable
-                                  key={card.id}
-                                  draggableId={card.id}
-                                  index={index}
-                                >
-                                  {(provided, snapshot) => (
-                                    <div
-                                      ref={provided.innerRef}
-                                      {...provided.draggableProps}
-                                      {...provided.dragHandleProps}
-                                      style={{
-                                        ...provided.draggableProps.style,
-                                        backgroundColor: colors.surface,
-                                      }}
-                                      className={`p-3 rounded-md shadow cursor-pointer
-                                        ${snapshot.isDragging ? 'shadow-lg' : 'shadow'}
-                                        transition-shadow duration-200`}
-                                      onClick={() => {
-                                        setSelectedCard(card);
-                                        setIsCardModalOpen(true);
-                                      }}
-                                    >
-                                      <div className="flex justify-between items-center">
-                                        <span className="text-gray-700">{card.title}</span>
-                                        {card.dueDate && (
-                                          <span className="text-xs text-gray-500">
-                                            Due: {card.dueDate}
-                                          </span>
-                                        )}
-                                      </div>
-                                    </div>
-                                  )}
-                                </Draggable>
-                              ))}
-                              {provided.placeholder}
-                            </div>
-                          )}
-                        </Droppable>
-
-                        <Button 
-                          variant="ghost" 
-                          className="w-full mt-4 text-gray-600 hover:text-gray-800"
-                          style={{ backgroundColor: colors.surface }}
-                          onClick={() => addCard(list.id)}
-                        >
-                          <Plus className="h-4 w-4 mr-2" /> Add Card
-                        </Button>
-                      </div>
-                    )}
-                  </Draggable>
+                  <List
+                    key={list.id}
+                    list={list}
+                    index={index}
+                    onDeleteList={deleteList}
+                    onAddCard={addCard}
+                    onCardClick={(card) => {
+                      setSelectedCard(card);
+                      setIsCardModalOpen(true);
+                    }}
+                    onUpdateTitle={updateListTitle}
+                  />
                 ))}
                 {provided.placeholder}
 
@@ -262,8 +179,8 @@ const TrelloBoard = () => {
               </div>
             )}
           </Droppable>
-        </div>
-      </DragDropContext>
+        </DragDropContext>
+      </main>
 
       <Dialog open={isCardModalOpen} onOpenChange={setIsCardModalOpen}>
         <DialogContent style={{ backgroundColor: colors.surface }}>
@@ -318,11 +235,11 @@ const TrelloBoard = () => {
         </DialogContent>
       </Dialog>
 
-      <footer style={{ backgroundColor: colors.primary }} className="shadow p-4 text-center text-white">
-        Trello Clone - Built with Next.js and shadcn/ui
+      <footer style={{ backgroundColor: colors.primary }} className="shadow p-4 text-center text-white mt-auto">
+        <p>Trello Clone - Built with Next.js and shadcn/ui</p>
+        <p>Drag n Drop library used - @hello-pangea</p>
+        <p>built by - Ankush Sangwan</p>
       </footer>
     </div>
   );
 };
-
-export default TrelloBoard;
